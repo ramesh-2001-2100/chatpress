@@ -53,7 +53,7 @@ While born from AI conversations, **ChatPress works with any Markdown or formatt
 
 ### 1. Online (GitHub Pages)
 Visit the live deployment at:  
-👉 **`https://ramesh-2001-2100.github.io/chatpress/`**
+👉 **[https://ramesh-2001-2100.github.io/chatpress/](https://ramesh-2001-2100.github.io/chatpress/)**
 
 1. Paste your copied chat or Markdown text into the content area.
 2. Set your **Book Title** and **Author / Source**.
