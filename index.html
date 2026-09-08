@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatPress - AI Chat to EPUB Converter</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #6366f1;
+      --secondary: #334155;
+      --accent: #38bdf8;
+      --success: #10b981;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 16px; min-height: 100vh; }
+    .container { max-width: 900px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 20px; }
+    h1 { font-size: 1.6rem; font-weight: 700; color: #a5b4fc; }
+    p.subtitle { color: var(--text-muted); font-size: 0.85rem; margin-top: 4px; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 600px) { .input-row { grid-template-columns: 1fr; } }
+    label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 4px; }
+    input[type="text"], select, textarea { width: 100%; background: #0b1120; border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 10px; font-size: 0.9rem; outline: none; transition: border-color 0.2s; }
+    input[type="text"]:focus, select:focus, textarea:focus { border-color: var(--primary); }
+    textarea { height: 260px; font-family: monospace; font-size: 0.85rem; resize: vertical; }
+    .button-group { display: flex; gap: 10px; margin-top: 4px; }
+    .btn { border: none; border-radius: 8px; padding: 12px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s; display: inline-flex; align-items: center; justify-content: center; }
+    .btn-primary { background: var(--primary); color: white; flex: 2; }
+    .btn-secondary { background: var(--secondary); color: #cbd5e1; flex: 1; }
+    .btn:hover { opacity: 0.9; }
+    .toggles-container { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
+    .toggle-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-muted); }
+    .toggle-row input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer; }
+    .status { font-size: 0.85rem; color: var(--success); text-align: center; min-height: 18px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>ChatPress - AI Chat to EPUB Converter</h1>
+    <p class="subtitle">Paste Markdown or chat text to generate a clean .epub file on your device</p>
+  </header>
+
+  <div class="card">
+    <div class="input-row">
+      <div>
+        <label>Book Title</label>
+        <input type="text" id="bookTitle" value="My AI Knowledge Digest">
+      </div>
+      <div>
+        <label>Author / Source</label>
+        <input type="text" id="bookAuthor" value="AI Assistant">
+      </div>
+    </div>
+
+    <div>
+      <label>Chapter Splitting</label>
+      <select id="splitRule">
+        <option value="h1h2">Heading 1 & 2 (# or ##)</option>
+        <option value="turns">User / Assistant Turns</option>
+        <option value="single">Single Chapter (Entire Chat)</option>
+      </select>
+    </div>
+
+    <div>
+      <label>Chat Content</label>
+      <textarea id="rawContent" placeholder="Paste your copied chat text or markdown here..."></textarea>
+    </div>
+
+    <div class="toggles-container">
+      <div class="toggle-row">
+        <input type="checkbox" id="promptLocation">
+        <label for="promptLocation" style="text-transform: none; font-size: 0.85rem; font-weight: normal; margin: 0; cursor: pointer;">
+          Ask where to save (choose folder/location prompt)
+        </label>
+      </div>
+      <div class="toggle-row">
+        <input type="checkbox" id="autoClear" checked>
+        <label for="autoClear" style="text-transform: none; font-size: 0.85rem; font-weight: normal; margin: 0; cursor: pointer;">
+          Auto-clear content field after successful download
+        </label>
+      </div>
+    </div>
+
+    <div class="button-group">
+      <button class="btn btn-secondary" onclick="clearFields()">Clear Fields</button>
+      <button class="btn btn-primary" onclick="buildEpub()">Download EPUB</button>
+    </div>
+
+    <div id="statusMsg" class="status"></div>
+  </div>
+</div>
+
+<script>
+  function clearFields() {
+    document.getElementById('rawContent').value = '';
+    document.getElementById('bookTitle').value = 'My AI Knowledge Digest';
+    document.getElementById('bookAuthor').value = 'AI Assistant';
+    const status = document.getElementById('statusMsg');
+    status.style.color = 'var(--text-muted)';
+    status.innerText = 'Fields cleared.';
+    setTimeout(() => { status.innerText = ''; }, 2000);
+  }
+
+  function parseChapters(text, rule) {
+    if (!text.trim()) return [];
+    if (rule === 'single') {
+      return [{ title: 'Full Conversation', body: marked.parse(text) }];
+    }
+
+    if (rule === 'turns') {
+      const pattern = /(?:^|\n)(?=(?:User|Human|You|Assistant|AI|Claude|Gemini|ChatGPT):)/i;
+      const parts = text.split(pattern).filter(p => p.trim());
+      if (parts.length <= 1) return [{ title: 'Full Conversation', body: marked.parse(text) }];
+      return parts.map((part, i) => ({
+        title: part.trim().split('\n')[0].substring(0, 40) || `Turn ${i + 1}`,
+        body: marked.parse(part.trim())
+      }));
+    }
+
+    const lines = text.split('\n');
+    let chapters = [];
+    let currentTitle = 'Overview';
+    let currentLines = [];
+
+    lines.forEach(line => {
+      const match = line.match(/^#{1,2}\s+(.+)/);
+      if (match) {
+        if (currentLines.length > 0) {
+          chapters.push({ title: currentTitle, body: marked.parse(currentLines.join('\n')) });
+          currentLines = [];
+        }
+        currentTitle = match[1].trim();
+      }
+      currentLines.push(line);
+    });
+
+    if (currentLines.length > 0) {
+      chapters.push({ title: currentTitle, body: marked.parse(currentLines.join('\n')) });
+    }
+    return chapters.length > 0 ? chapters : [{ title: 'Content', body: marked.parse(text) }];
+  }
+
+  function escapeXml(str) {
+    return (str || '').replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '\'': '&apos;', '"': '&quot;' }[c]));
+  }
+
+  // Generates a clean, reader-safe filename preserving readable title words
+  function cleanFileName(title) {
+    const raw = (title || 'ai_chat').trim();
+    // Replace invalid filesystem characters and collapse multiple spaces into clean single underscore
+    let cleaned = raw.replace(/[\\/:*?"<>|#%&{}\$!'@+`=]/g, '').trim();
+    cleaned = cleaned.replace(/\s+/g, '_');
+    if (!cleaned) cleaned = 'ai_chat';
+    return `${cleaned}.epub`;
+  }
+
+  async function buildEpub() {
+    const contentInput = document.getElementById('rawContent');
+    const text = contentInput.value.trim();
+    const statusMsg = document.getElementById('statusMsg');
+    
+    if (!text) {
+      alert('Please paste some chat content first.');
+      return;
+    }
+
+    statusMsg.style.color = 'var(--accent)';
+    statusMsg.innerText = 'Packaging EPUB...';
+
+    const title = document.getElementById('bookTitle').value.trim() || 'AI Chat Digest';
+    const author = document.getElementById('bookAuthor').value.trim() || 'AI Assistant';
+    const rule = document.getElementById('splitRule').value;
+    const autoClear = document.getElementById('autoClear').checked;
+    const promptLocation = document.getElementById('promptLocation').checked;
+    const filename = cleanFileName(title);
+
+    const chapters = parseChapters(text, rule);
+    const bookUuid = 'urn:uuid:' + 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+    const dateStr = new Date().toISOString().split('T')[0];
+
+    const zip = new JSZip();
+    zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
+    zip.file("META-INF/container.xml", `<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`);
+
+    zip.file("OEBPS/style.css", `body { font-family: Georgia, serif; line-height: 1.6; margin: 5%; color: #111; }
+pre { background: #f1f5f9; padding: 12px; border-radius: 4px; overflow-x: auto; font-family: monospace; font-size: 0.9em; }
+code { background: #f1f5f9; padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+blockquote { border-left: 4px solid #6366f1; padding-left: 12px; color: #475569; margin: 1em 0; }`);
+
+    let manifestItems = [
+      `<item id="style" href="style.css" media-type="text/css"/>`,
+      `<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>`
+    ];
+    let spineItems = [];
+    let tocItems = [];
+
+    chapters.forEach((ch, idx) => {
+      const fn = `chapter_${idx + 1}.xhtml`;
+      zip.file(`OEBPS/${fn}`, `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head><title>${escapeXml(ch.title)}</title><link rel="stylesheet" type="text/css" href="style.css" /></head>
+<body>${ch.body}</body></html>`);
+      manifestItems.push(`<item id="ch${idx + 1}" href="${fn}" media-type="application/xhtml+xml"/>`);
+      spineItems.push(`<itemref idref="ch${idx + 1}"/>`);
+      tocItems.push(`<li><a href="${fn}">${escapeXml(ch.title)}</a></li>`);
+    });
+
+    zip.file("OEBPS/nav.xhtml", `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head><title>TOC</title><link rel="stylesheet" type="text/css" href="style.css" /></head>
+<body><nav epub:type="toc" id="toc"><h1>Table of Contents</h1><ol>${tocItems.join('')}</ol></nav></body></html>`);
+
+    zip.file("OEBPS/content.opf", `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookID" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>${escapeXml(title)}</dc:title>
+    <dc:creator>${escapeXml(author)}</dc:creator>
+    <dc:identifier id="BookID">${bookUuid}</dc:identifier>
+    <dc:language>en</dc:language>
+    <dc:date>${dateStr}</dc:date>
+  </metadata>
+  <manifest>${manifestItems.join('')}</manifest>
+  <spine>${spineItems.join('')}</spine>
+</package>`);
+
+    try {
+      const blob = await zip.generateAsync({ type: "blob", mimeType: "application/epub+zip" });
+
+      // Check if user requested folder selection and File System Access API is supported
+      if (promptLocation && 'showSaveFilePicker' in window) {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: filename,
+            types: [{
+              description: 'EPUB E-Book',
+              accept: { 'application/epub+zip': ['.epub'] }
+            }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          finishDownload(contentInput, autoClear, statusMsg, `Saved as "${filename}"!`);
+          return;
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            statusMsg.style.color = 'var(--text-muted)';
+            statusMsg.innerText = 'Save canceled.';
+            return;
+          }
+          // Fall through to standard download if picker throws unexpected error
+          console.warn('File picker failed, falling back to standard download:', err);
+        }
+      }
+
+      // Standard / fallback browser download
+      // Creates an explicit File object so Android Download Manager retains the human-readable filename
+      const file = new File([blob], filename, { type: 'application/epub+zip' });
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+      finishDownload(contentInput, autoClear, statusMsg, `Downloaded as "${filename}"!`);
+    } catch (err) {
+      statusMsg.style.color = 'var(--danger)';
+      statusMsg.innerText = 'Error building EPUB: ' + err.message;
+    }
+  }
+
+  function finishDownload(inputElem, autoClear, statusElem, successText) {
+    statusElem.style.color = 'var(--success)';
+    statusElem.innerText = `✅ ${successText}`;
+    if (autoClear) {
+      inputElem.value = '';
+    }
+    setTimeout(() => { statusElem.innerText = ''; }, 4000);
+  }
+</script>
+</body>
+</html>
