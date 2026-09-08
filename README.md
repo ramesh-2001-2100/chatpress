@@ -2,7 +2,7 @@
 > Turn AI chats, transcripts, and raw Markdown into clean, readable EPUB e-books in seconds.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![GitHub Pages](https://img.shields.io/badge/Deployment-GitHub%20Pages-success.svg)](https://ramesh.2001.2100.github.io/chatpress/)
+[![GitHub Pages](https://img.shields.io/badge/Deployment-GitHub%20Pages-success.svg)](https://ramesh-2001-2100.github.io/chatpress/)
 [![Zero Dependencies](https://img.shields.io/badge/Backend-Zero%20Server%20%2F%20100%25%20Local-purple.svg)](#privacy--architecture)
 
 ---
@@ -53,7 +53,7 @@ While born from AI conversations, **ChatPress works with any Markdown or formatt
 
 ### 1. Online (GitHub Pages)
 Visit the live deployment at:  
-👉 **`https://ramesh.2001.2100.github.io/chatpress/`**
+👉 **`https://ramesh-2001-2100.github.io/chatpress/`**
 
 1. Paste your copied chat or Markdown text into the content area.
 2. Set your **Book Title** and **Author / Source**.
@@ -64,6 +64,6 @@ Visit the live deployment at:
 ### 2. Local / Offline Use
 1. Clone or download this repository:
    ```bash
-   git clone https://github.com/ramesh.2001.2100/chatpress.git
+   git clone https://github.com/ramesh-2001-2100/chatpress.git
    ```
 2. Open `index.html` in any web browser.
